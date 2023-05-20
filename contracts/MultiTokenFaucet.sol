@@ -33,11 +33,21 @@ contract MultiTokenFaucet {
         available[address(this)] = msg.value;
     }
 
+    // ONLY ADMIN FUNCTIONS
+
     function setNewAdmin(address newAdmin) external onlyAdmin {
         require(newAdmin != address(0), "Address zero cannot admin this contract");
         require(newAdmin != admin, "This address is already the admin");
         admin = newAdmin;
     }
+
+    function addTokenSupport(string memory tokenName, address tokenAddress) public onlyAdmin {
+        require(_isContract(tokenAddress), "The address is not a contract");
+        require(tokens[tokenName] == address(0), "This tokens is already mapped.");
+        tokens[tokenName] = tokenAddress;
+    }
+
+    // PUBLIC & EXTERNAL FUNCTIONS
 
     function donateNativeCoins() public payable {
         require(msg.value > 0, "No native coins sent");
@@ -56,10 +66,19 @@ contract MultiTokenFaucet {
             IERC20(nativeToken),
             msg.sender,
             address(this),
-            amount
-        )
+            _amount
+        );
+        available[_tokenName] = _amount;
     }
 
+    // PRIVATE FUNCTIONS
+
+    /*
+     *   @dev - Verifies that enough tokens are approved for transfer
+     *
+     *   @param `token` - the address of the local token contract
+     *   @param `amount` - the required amount for the transfer
+     */
     function _isApprovedEnough(address token, uint256 amount) private view {
         uint256 approved = IERC20(token).allowance(
             msg.sender,
@@ -68,5 +87,14 @@ contract MultiTokenFaucet {
         if (approved < amount) {
             revert InsufficientApproval({required: amount, approved: approved});
         }
+    }
+
+    /*
+     *   @dev - Checks whether an address belongs to a contract
+     *   @param `_address` - the checked address
+     *   @returns `true` if the address is a contract | `false` otherwise
+     */
+    function _isContract(address _address) private view returns (bool) {
+        return _address.code.length > 0;
     }
 }
