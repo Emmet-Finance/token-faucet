@@ -4,6 +4,9 @@ pragma solidity >=0.8.17 <0.9.0;
 import "./SafeERC20.sol";
 
 contract MultiTokenFaucet {
+
+    using Address for address;
+    using SafeERC20 for address;
     // ****************** Storage ******************
 
     // Contract admin
@@ -59,7 +62,7 @@ contract MultiTokenFaucet {
         external
         onlyAdmin
     {
-        require(_isContract(_tokenAddress), "The address is not a contract");
+        require(_tokenAddress.isContract(), "The address is not a contract");
         require(
             tokens[_tokenName] == address(0),
             "This tokens is already mapped."
@@ -214,12 +217,4 @@ contract MultiTokenFaucet {
         }
     }
 
-    /*
-     *   @dev - Checks whether an address belongs to a contract
-     *   @param `_address` - the checked address
-     *   @returns `true` if the address is a contract | `false` otherwise
-     */
-    function _isContract(address _address) private view returns (bool) {
-        return _address.code.length > 0;
-    }
 }
