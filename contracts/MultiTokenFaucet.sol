@@ -163,7 +163,7 @@ contract MultiTokenFaucet {
         // Left coins update
         available[address(this)] = msg.value;
 
-        emit Log(msg.sender, "Donated native coin", msg.value);
+        emit Log(msg.sender, string.concat("Donated ", nativeCoinName), msg.value);
     }
 
     /*
@@ -193,7 +193,7 @@ contract MultiTokenFaucet {
         // Left tokens update
         available[tokens[_tokenName].tokenAddress] += amount;
 
-        emit Log(msg.sender, "Donated native token", amount);
+        emit Log(msg.sender, string.concat("Donated ", _tokenName), amount);
     }
 
     // GETTING COINS / TOKENS
@@ -221,7 +221,7 @@ contract MultiTokenFaucet {
         // Reset the time lock
         locker[msg.sender] = block.timestamp;
 
-        emit Log(msg.sender, "Recieved native coin", coinsAmount);
+        emit Log(msg.sender, string.concat("Received ", nativeCoinName), coinsAmount);
     }
 
     /*
@@ -235,13 +235,12 @@ contract MultiTokenFaucet {
 
         // Check
         _checkTimelock();
-        require(nativeToken != address(0), "Unsupported token");
+        require(nativeToken != address(0), string.concat(_tokenName, "is not suported"));
         require(available[nativeToken] >= amount, "No such tokens left");
 
         // Transfer
-        SafeERC20.safeTransferFrom(
-            IERC20(nativeToken),
-            address(this),
+        IERC20 currentToken = IERC20(nativeToken);
+        currentToken.safeTransfer(
             msg.sender,
             amount
         );
@@ -254,7 +253,7 @@ contract MultiTokenFaucet {
         // Reset the time lock
         locker[msg.sender] = block.timestamp;
 
-        emit Log(msg.sender, "Recieved native token", amount);
+        emit Log(msg.sender, string.concat("Received ", _tokenName), amount);
     }
 
     // ****************** PRIVATE FUNCTIONS ******************
