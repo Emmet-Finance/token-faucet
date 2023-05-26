@@ -4,18 +4,19 @@ pragma solidity >=0.8.17 <0.9.0;
 import "./SafeERC20.sol";
 
 contract MultiTokenFaucet {
-
     using Address for address;
     using SafeERC20 for address;
+
     // ****************** Storage ******************
 
     // Contract admin
     address public admin;
     // Native currency name
     string nativeCoinName;
-
-    uint256 coins = 100_000_000 gwei; // 0.1 ETH
-    uint256 tokenAmount = 100 ether; // 100 tokens with 18 decimals
+    // Fixed amount of coins to drain
+    uint256 public coinsAmount;
+    // Fixed amount of tokens to drain
+    uint256 public tokenAmount;
     // Token name => contract address
     mapping(string => address) public tokens;
     // Token address => amount available
@@ -43,6 +44,9 @@ contract MultiTokenFaucet {
         nativeCoinName = _nativeCoinName;
         tokens[nativeCoinName] = address(this);
         available[address(this)] = msg.value;
+        // Set the transfer amounts
+        coinsAmount = 100_000_000 gwei; // 0.1 ETH
+        tokenAmount = 100 ether; // 100 tokens with 18 decimals
     }
 
     // ****************** ADMIN ******************
@@ -69,11 +73,15 @@ contract MultiTokenFaucet {
         );
         tokens[_tokenName] = _tokenAddress;
 
-        emit Log(msg.sender, "Token support added", uint256(uint160(_tokenAddress)));
+        emit Log(
+            msg.sender,
+            "Token support added",
+            uint256(uint160(_tokenAddress))
+        );
     }
 
     function updateCoinDrainAmount(uint256 _newAmount) external onlyAdmin {
-        coins = _newAmount;
+        coinsAmount = _newAmount;
         emit Log(msg.sender, "Coin drain amount updated", _newAmount);
     }
 
@@ -141,21 +149,24 @@ contract MultiTokenFaucet {
     function drainCoin() external {
         // Checks
         _checkTimelock();
-        require(available[address(this)] >= coins, "No more native coins left");
+        require(
+            available[address(this)] >= coinsAmount,
+            "No more native coins left"
+        );
 
         // Transfer
         address payable receiver = payable(msg.sender);
-        receiver.transfer(coins);
+        receiver.transfer(coinsAmount);
 
         // STATE UPDATE
 
         // Left coins update
-        available[address(this)] -= coins;
+        available[address(this)] -= coinsAmount;
 
         // Reset the time lock
         locker[msg.sender] = block.timestamp;
 
-        emit Log(msg.sender, "Recieved native coin", coins);
+        emit Log(msg.sender, "Recieved native coin", coinsAmount);
     }
 
     /*
@@ -216,5 +227,4 @@ contract MultiTokenFaucet {
             revert InsufficientApproval({required: amount, approved: approved});
         }
     }
-
 }
