@@ -4,27 +4,27 @@ pragma solidity >=0.8.17 <0.9.0;
 import "./SafeERC20.sol";
 
 /*
-*   M U L T I  T O K E N  F A U C E T
-*
-*   **** Admin Functions ****
-*
-*   1. setNewAdmin
-*   2. addTokenSupport
-*   3. updateCoinDrainAmount
-*   4. updateTokenDrainAmount
-*
-*   **** Public & External ****
-*
-*   1. donateNativeCoins
-*   2. donateERC20
-*   3. drainCoin
-*   4. drainToken
-*
-*   **** Private Functions ****
-*
-*   1. _checkTimelock
-*   2. _isApprovedEnough
-*/
+ *   M U L T I  T O K E N  F A U C E T
+ *
+ *   **** Admin Functions ****
+ *
+ *   1. setNewAdmin
+ *   2. addTokenSupport
+ *   3. updateCoinDrainAmount
+ *   4. updateTokenDrainAmount
+ *
+ *   **** Public & External ****
+ *
+ *   1. donateNativeCoins
+ *   2. donateERC20
+ *   3. drainCoin
+ *   4. drainToken
+ *
+ *   **** Private Functions ****
+ *
+ *   1. _checkTimelock
+ *   2. _isApprovedEnough
+ */
 contract MultiTokenFaucet {
     using Address for address;
     using SafeERC20 for address;
@@ -80,6 +80,9 @@ contract MultiTokenFaucet {
 
     // ****************** ADMIN ******************
 
+    /*
+    * Sets a new contract admin
+    */
     function setNewAdmin(address _newAdmin) external onlyAdmin {
         require(
             _newAdmin != address(0),
@@ -91,6 +94,19 @@ contract MultiTokenFaucet {
         emit Log(msg.sender, "Admin updated", uint256(uint160(_newAdmin)));
     }
 
+    /*
+     * Maps a token Name with its { address & decimals }
+     *
+     * @param `_tokenName` the token symbol
+     * @param `_tokenAddress` address of the token contract
+     * @param `_decimals` token decimals 0..18
+     *
+     * Reverts when:
+     *
+     * 1. `_tokenAddress` - is not a contract address
+     * 2. `_tokenName` - is not supported by the faucet
+     * 3. `_decimals` greater than 18
+     */
     function addTokenSupport(
         string memory _tokenName,
         address _tokenAddress,
@@ -102,10 +118,7 @@ contract MultiTokenFaucet {
             tokens[_tokenName].tokenAddress == address(0),
             "This tokens is already mapped."
         );
-        require(
-            0 <= _decimals && _decimals <= 18,
-            "Token decimals must lie between 0 & 18"
-        );
+        require(_decimals <= 18, "Token decimals must lie between 0 & 18");
 
         // Update storage
         tokens[_tokenName].tokenAddress = _tokenAddress;
@@ -118,11 +131,17 @@ contract MultiTokenFaucet {
         );
     }
 
+    /*
+    * Updates the amount of drained coins
+    */
     function updateCoinDrainAmount(uint256 _newAmount) external onlyAdmin {
         coinsAmount = _newAmount;
         emit Log(msg.sender, "Coin drain amount updated", _newAmount);
     }
 
+    /*
+    * Updates the amount of drained tokens
+    */
     function updateTokenDrainAmount(uint256 _newAmount) external onlyAdmin {
         tokenAmount = _newAmount;
         emit Log(msg.sender, "Token drain amount updated", _newAmount);
@@ -133,7 +152,7 @@ contract MultiTokenFaucet {
     // FUNDING THE FAUCET
 
     /*
-     * Send native coins to the contract
+     * Sends native coins to the contract
      */
     function donateNativeCoins() public payable {
         // Checks
@@ -148,7 +167,7 @@ contract MultiTokenFaucet {
     }
 
     /*
-     * Send native ERC20 tokens to the contract
+     * Sends native ERC20 tokens to the contract
      */
     function donateERC20(string memory _tokenName, uint256 _amount)
         public
@@ -156,7 +175,7 @@ contract MultiTokenFaucet {
     {
         // Get the ERC20 token contract address
         address nativeToken = tokens[_tokenName].tokenAddress;
-        uint256 amount = _amount * 10 ** tokens[_tokenName].decimals;
+        uint256 amount = _amount * 10**tokens[_tokenName].decimals;
 
         // Checks
         require(nativeToken != address(0), "Token contract address unknown.");
@@ -209,15 +228,15 @@ contract MultiTokenFaucet {
     }
 
     /*
-     * Send native ERC20 tokens to the caller
+     * Sends native ERC20 tokens to the caller
      */
     function drainToken(string memory _tokenName) external {
         // Get the ERC20 token contract address
         address nativeToken = tokens[_tokenName].tokenAddress;
         // Convert to tokens with decimals
-        uint256 amount = tokenAmount * 10 ** tokens[_tokenName].decimals;
+        uint256 amount = tokenAmount * 10**tokens[_tokenName].decimals;
 
-        // Checks
+        // Check
         _checkTimelock();
         require(nativeToken != address(0), "Unsupported token");
         require(available[nativeToken] >= amount, "No such tokens left");
@@ -257,15 +276,18 @@ contract MultiTokenFaucet {
     }
 
     /*
-     *   @dev - Verifies that enough tokens are approved for transfer
+     *   Verifies that enough tokens are approved for transfer
      *
-     *   @param `token` - the address of the local token contract
-     *   @param `amount` - the required amount for the transfer
+     *   @param `token` - the  local token contract address
+     *   @param `amount` - the required transfer amount
      */
-    function _isApprovedEnough(address token, uint256 amount) private view {
-        uint256 approved = IERC20(token).allowance(msg.sender, address(this));
-        if (approved < amount) {
-            revert InsufficientApproval({required: amount, approved: approved});
+    function _isApprovedEnough(address _token, uint256 _amount) private view {
+        uint256 approved = IERC20(_token).allowance(msg.sender, address(this));
+        if (approved < _amount) {
+            revert InsufficientApproval({
+                required: _amount,
+                approved: approved
+            });
         }
     }
 }
