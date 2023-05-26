@@ -33,12 +33,12 @@ contract MultiTokenFaucet {
 
     // Contract admin
     address public admin;
-    // Native currency name
-    string nativeCoinName;
     // Fixed amount of coins to drain
     uint256 public coinsAmount;
     // Fixed amount of tokens to drain
     uint256 public tokenAmount;
+    // Native currency name
+    string private nativeCoinName;
 
     struct Token {
         address tokenAddress;
@@ -270,7 +270,7 @@ contract MultiTokenFaucet {
         uint256 plusOneDay = timeLock + 1 days;
         // If timeLock == 0 => first timer
         // If timeLock > 0 => check time elapsed
-        if (timeLock > uint256(0) && plusOneDay < block.timestamp) {
+        if (timeLock > uint256(0) && plusOneDay > block.timestamp) {
             revert AlreadyDrainedToday();
         }
     }
