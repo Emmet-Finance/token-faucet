@@ -5,11 +5,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract MultiTokenFaucet {
+    // ****************** Storage ******************
 
-    // Storage
+    // Contract admin
     address public admin;
     // Native currency name
     string nativeCoinName;
+
+    uint256 coins = 100_000_000 gwei; // 0.1 ETH
+    uint256 tokenAmount = 100 ether; // 100 tokens with 18 decimals
     // Token name => contract address
     mapping(string => address) public tokens;
     // Token address => amount available
@@ -17,50 +21,100 @@ contract MultiTokenFaucet {
     // User address => locked time
     mapping(address => uint256) public locker;
 
-    // Errors
+    // ****************** Errors ******************
     error InsufficientApproval(uint256 required, uint256 approved);
+    error AlreadyDrainedToday();
 
-    // Modifiers
-    modifier onlyAdmin {
+    // ****************** Events ******************
+    event Log(address user, string message, uint256 amount);
+
+    // ****************** Modifiers ******************
+    modifier onlyAdmin() {
         require(msg.sender == admin, "Role restricted call.");
         _;
     }
 
     constructor(string memory _nativeCoinName) payable {
+        // Set the admin
         admin = msg.sender;
+        // Set the native coin
         nativeCoinName = _nativeCoinName;
         tokens[nativeCoinName] = address(this);
         available[address(this)] = msg.value;
     }
 
-    // ONLY ADMIN FUNCTIONS
+    // ****************** ADMIN ******************
 
-    function setNewAdmin(address newAdmin) external onlyAdmin {
-        require(newAdmin != address(0), "Address zero cannot admin this contract");
-        require(newAdmin != admin, "This address is already the admin");
-        admin = newAdmin;
+    function setNewAdmin(address _newAdmin) external onlyAdmin {
+        require(
+            _newAdmin != address(0),
+            "Address zero cannot admin this contract"
+        );
+        require(_newAdmin != admin, "This address is already the admin");
+        admin = _newAdmin;
+        //       Old admin.      message.          New Admin
+        emit Log(msg.sender, "Admin updated", uint256(uint160(_newAdmin)));
     }
 
-    function addTokenSupport(string memory tokenName, address tokenAddress) public onlyAdmin {
-        require(_isContract(tokenAddress), "The address is not a contract");
-        require(tokens[tokenName] == address(0), "This tokens is already mapped.");
-        tokens[tokenName] = tokenAddress;
+    function addTokenSupport(string memory _tokenName, address _tokenAddress)
+        external
+        onlyAdmin
+    {
+        require(_isContract(_tokenAddress), "The address is not a contract");
+        require(
+            tokens[_tokenName] == address(0),
+            "This tokens is already mapped."
+        );
+        tokens[_tokenName] = _tokenAddress;
+
+        emit Log(msg.sender, "Token support added", uint256(uint160(_tokenAddress)));
     }
 
-    // PUBLIC & EXTERNAL FUNCTIONS
+    function updateCoinDrainAmount(uint256 _newAmount) external onlyAdmin {
+        coins = _newAmount;
+        emit Log(msg.sender, "Coin drain amount updated", _newAmount);
+    }
 
+    function updateTokenDrainAmount(uint256 _newAmount) external onlyAdmin {
+        tokenAmount = _newAmount;
+        emit Log(msg.sender, "Token drain amount updated", _newAmount);
+    }
+
+    // ****************** PUBLIC & EXTERNAL ******************
+
+    // FUNDING THE FAUCET
+
+    /*
+     * Send native coins to the contract
+     */
     function donateNativeCoins() public payable {
+        // Checks
         require(msg.value > 0, "No native coins sent");
+
+        // STATE UPDATE
+
+        // Left coins update
         available[address(this)] = msg.value;
+
+        emit Log(msg.sender, "Donated native coin", msg.value);
     }
 
-    function donateERC20(string memory _tokenName, uint256 _amount) public payable {
+    /*
+     * Send native ERC20 tokens to the contract
+     */
+    function donateERC20(string memory _tokenName, uint256 _amount)
+        public
+        payable
+    {
         // Get the ERC20 token contract address
         address nativeToken = tokens[_tokenName];
+
+        // Checks
         require(nativeToken != address(0), "Token contract address unknown.");
         require(_amount > 0, "Cannot accept 0 tokens");
         // Check the user has approved at least the amount
         _isApprovedEnough(nativeToken, _amount);
+
         // Safely transfer
         SafeERC20.safeTransferFrom(
             IERC20(nativeToken),
@@ -68,10 +122,85 @@ contract MultiTokenFaucet {
             address(this),
             _amount
         );
-        available[_tokenName] = _amount;
+
+        // STATE UPDATE
+
+        // Left tokens update
+        available[tokens[_tokenName]] = _amount;
+
+        emit Log(msg.sender, "Donated native token", _amount);
     }
 
-    // PRIVATE FUNCTIONS
+    // GETTING COINS / TOKENS
+
+    /*
+     * Send native coins to the caller
+     */
+    function drainCoin() external {
+        // Checks
+        _checkTimelock();
+        require(available[address(this)] >= coins, "No more native coins left");
+
+        // Transfer
+        address payable receiver = payable(msg.sender);
+        receiver.transfer(coins);
+
+        // STATE UPDATE
+
+        // Left coins update
+        available[address(this)] -= coins;
+
+        // Reset the time lock
+        locker[msg.sender] = block.timestamp;
+
+        emit Log(msg.sender, "Recieved native coin", coins);
+    }
+
+    /*
+     * Send native ERC20 tokens to the caller
+     */
+    function drainToken(string memory _tokenName) external {
+        // Get the ERC20 token contract address
+        address nativeToken = tokens[_tokenName];
+
+        // Checks
+        _checkTimelock();
+        require(nativeToken != address(0), "Unsupported token");
+        require(available[nativeToken] >= tokenAmount, "No such tokens left");
+
+        // Transfer
+        SafeERC20.safeTransferFrom(
+            IERC20(nativeToken),
+            address(this),
+            msg.sender,
+            tokenAmount
+        );
+
+        // STATE UPDATE
+
+        // Left tokens update
+        available[nativeToken] -= tokenAmount;
+
+        // Reset the time lock
+        locker[msg.sender] = block.timestamp;
+
+        emit Log(msg.sender, "Recieved native token", tokenAmount);
+    }
+
+    // ****************** PRIVATE FUNCTIONS ******************
+
+    /*
+     *   Reverts if still time locked
+     */
+    function _checkTimelock() private view {
+        uint256 timeLock = locker[msg.sender];
+        uint256 plusOneDay = timeLock + 1 days;
+        // If timeLock == 0 => first timer
+        // If timeLock > 0 => check time elapsed
+        if (timeLock > uint256(0) && plusOneDay < block.timestamp) {
+            revert AlreadyDrainedToday();
+        }
+    }
 
     /*
      *   @dev - Verifies that enough tokens are approved for transfer
@@ -80,10 +209,7 @@ contract MultiTokenFaucet {
      *   @param `amount` - the required amount for the transfer
      */
     function _isApprovedEnough(address token, uint256 amount) private view {
-        uint256 approved = IERC20(token).allowance(
-            msg.sender,
-            address(this)
-        );
+        uint256 approved = IERC20(token).allowance(msg.sender, address(this));
         if (approved < amount) {
             revert InsufficientApproval({required: amount, approved: approved});
         }
