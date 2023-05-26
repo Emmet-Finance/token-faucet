@@ -3,6 +3,28 @@ pragma solidity >=0.8.17 <0.9.0;
 
 import "./SafeERC20.sol";
 
+/*
+*   M U L T I  T O K E N  F A U C E T
+*
+*   **** Admin Functions ****
+*
+*   1. setNewAdmin
+*   2. addTokenSupport
+*   3. updateCoinDrainAmount
+*   4. updateTokenDrainAmount
+*
+*   **** Public & External ****
+*
+*   1. donateNativeCoins
+*   2. donateERC20
+*   3. drainCoin
+*   4. drainToken
+*
+*   **** Private Functions ****
+*
+*   1. _checkTimelock
+*   2. _isApprovedEnough
+*/
 contract MultiTokenFaucet {
     using Address for address;
     using SafeERC20 for address;
@@ -17,8 +39,14 @@ contract MultiTokenFaucet {
     uint256 public coinsAmount;
     // Fixed amount of tokens to drain
     uint256 public tokenAmount;
-    // Token name => contract address
-    mapping(string => address) public tokens;
+
+    struct Token {
+        address tokenAddress;
+        uint8 decimals;
+    }
+
+    // Token name => Token {contract address, decimals}
+    mapping(string => Token) public tokens;
     // Token address => amount available
     mapping(address => uint256) public available;
     // User address => locked time
@@ -42,11 +70,12 @@ contract MultiTokenFaucet {
         admin = msg.sender;
         // Set the native coin
         nativeCoinName = _nativeCoinName;
-        tokens[nativeCoinName] = address(this);
+        tokens[nativeCoinName].tokenAddress = address(this);
+        tokens[nativeCoinName].decimals = 18;
         available[address(this)] = msg.value;
         // Set the transfer amounts
         coinsAmount = 100_000_000 gwei; // 0.1 ETH
-        tokenAmount = 100 ether; // 100 tokens with 18 decimals
+        tokenAmount = 100;
     }
 
     // ****************** ADMIN ******************
@@ -62,16 +91,25 @@ contract MultiTokenFaucet {
         emit Log(msg.sender, "Admin updated", uint256(uint160(_newAdmin)));
     }
 
-    function addTokenSupport(string memory _tokenName, address _tokenAddress)
-        external
-        onlyAdmin
-    {
+    function addTokenSupport(
+        string memory _tokenName,
+        address _tokenAddress,
+        uint8 _decimals
+    ) external onlyAdmin {
+        // Checks
         require(_tokenAddress.isContract(), "The address is not a contract");
         require(
-            tokens[_tokenName] == address(0),
+            tokens[_tokenName].tokenAddress == address(0),
             "This tokens is already mapped."
         );
-        tokens[_tokenName] = _tokenAddress;
+        require(
+            0 <= _decimals && _decimals <= 18,
+            "Token decimals must lie between 0 & 18"
+        );
+
+        // Update storage
+        tokens[_tokenName].tokenAddress = _tokenAddress;
+        tokens[_tokenName].decimals = _decimals;
 
         emit Log(
             msg.sender,
@@ -117,28 +155,29 @@ contract MultiTokenFaucet {
         payable
     {
         // Get the ERC20 token contract address
-        address nativeToken = tokens[_tokenName];
+        address nativeToken = tokens[_tokenName].tokenAddress;
+        uint256 amount = _amount * 10 ** tokens[_tokenName].decimals;
 
         // Checks
         require(nativeToken != address(0), "Token contract address unknown.");
-        require(_amount > 0, "Cannot accept 0 tokens");
+        require(amount >= 1, "Minimum amount is 1 token");
         // Check the user has approved at least the amount
-        _isApprovedEnough(nativeToken, _amount);
+        _isApprovedEnough(nativeToken, amount);
 
         // Safely transfer
         SafeERC20.safeTransferFrom(
             IERC20(nativeToken),
             msg.sender,
             address(this),
-            _amount
+            amount
         );
 
         // STATE UPDATE
 
         // Left tokens update
-        available[tokens[_tokenName]] = _amount;
+        available[tokens[_tokenName].tokenAddress] = amount;
 
-        emit Log(msg.sender, "Donated native token", _amount);
+        emit Log(msg.sender, "Donated native token", amount);
     }
 
     // GETTING COINS / TOKENS
@@ -174,30 +213,32 @@ contract MultiTokenFaucet {
      */
     function drainToken(string memory _tokenName) external {
         // Get the ERC20 token contract address
-        address nativeToken = tokens[_tokenName];
+        address nativeToken = tokens[_tokenName].tokenAddress;
+        // Convert to tokens with decimals
+        uint256 amount = tokenAmount * 10 ** tokens[_tokenName].decimals;
 
         // Checks
         _checkTimelock();
         require(nativeToken != address(0), "Unsupported token");
-        require(available[nativeToken] >= tokenAmount, "No such tokens left");
+        require(available[nativeToken] >= amount, "No such tokens left");
 
         // Transfer
         SafeERC20.safeTransferFrom(
             IERC20(nativeToken),
             address(this),
             msg.sender,
-            tokenAmount
+            amount
         );
 
         // STATE UPDATE
 
         // Left tokens update
-        available[nativeToken] -= tokenAmount;
+        available[nativeToken] -= amount;
 
         // Reset the time lock
         locker[msg.sender] = block.timestamp;
 
-        emit Log(msg.sender, "Recieved native token", tokenAmount);
+        emit Log(msg.sender, "Recieved native token", amount);
     }
 
     // ****************** PRIVATE FUNCTIONS ******************
