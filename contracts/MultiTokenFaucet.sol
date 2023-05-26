@@ -27,7 +27,7 @@ import "./SafeERC20.sol";
  */
 contract MultiTokenFaucet {
     using Address for address;
-    using SafeERC20 for address;
+    using SafeERC20 for IERC20;
 
     // ****************** Storage ******************
 
@@ -171,7 +171,6 @@ contract MultiTokenFaucet {
      */
     function donateERC20(string memory _tokenName, uint256 _amount)
         public
-        payable
     {
         // Get the ERC20 token contract address
         address nativeToken = tokens[_tokenName].tokenAddress;
@@ -180,8 +179,6 @@ contract MultiTokenFaucet {
         // Checks
         require(nativeToken != address(0), "Token contract address unknown.");
         require(amount >= 1, "Minimum amount is 1 token");
-        // Check the user has approved at least the amount
-        _isApprovedEnough(nativeToken, amount);
 
         // Safely transfer
         SafeERC20.safeTransferFrom(
@@ -194,7 +191,7 @@ contract MultiTokenFaucet {
         // STATE UPDATE
 
         // Left tokens update
-        available[tokens[_tokenName].tokenAddress] = amount;
+        available[tokens[_tokenName].tokenAddress] += amount;
 
         emit Log(msg.sender, "Donated native token", amount);
     }
@@ -275,19 +272,4 @@ contract MultiTokenFaucet {
         }
     }
 
-    /*
-     *   Verifies that enough tokens are approved for transfer
-     *
-     *   @param `token` - the  local token contract address
-     *   @param `amount` - the required transfer amount
-     */
-    function _isApprovedEnough(address _token, uint256 _amount) private view {
-        uint256 approved = IERC20(_token).allowance(msg.sender, address(this));
-        if (approved < _amount) {
-            revert InsufficientApproval({
-                required: _amount,
-                approved: approved
-            });
-        }
-    }
 }
