@@ -1,7 +1,12 @@
 # token-faucet
 Testnet ERC20 &amp; Native coins faucet
 
-Caution: can be used only once per 24 hours!
+:::danger
+1. Can be used by an account only once per 24 hours!
+2. The account must have native coins to pay the TX fee!
+:::
+
+
 
 ## Goerly 
 
