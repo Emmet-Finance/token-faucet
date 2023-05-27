@@ -17,7 +17,7 @@ Requires min 0.029 ETH to call the functions.
 ### Supported tokens: 
 
 - [USDT](https://goerli.etherscan.io/token/0x291E558C60FB567087D9b87bd62b84Af67b9a376#code) - initial supply: $10M
-- [DAI](https://goerli.etherscan.io/token/0x5fe1238535009c09b6a6b122a763a0e50c9293b8#code) - initial supply: $10M
+- [DAI](https://goerli.etherscan.io/token/0x3fcc5C26fAd6B8fC9461E1d6f920A3C96F15f40a#code) - initial supply: $5M
 - [BUSD](https://goerli.etherscan.io/address/0x2991E99Df3EDD3F15962294A28b0aD1F4d56E07a#code) - initial supply: $10M
 
 
