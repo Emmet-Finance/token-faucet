@@ -119,10 +119,6 @@ contract MultiTokenFaucet {
     ) external onlyAdmin {
         // Checks
         require(_tokenAddress.isContract(), "The address is not a contract");
-        require(
-            tokens[_tokenName].tokenAddress == address(0),
-            string.concat(_tokenName, " is already mapped.")
-        );
         require(_decimals <= 18, "Token decimals must lie between 0 & 18");
 
         // Update storage
