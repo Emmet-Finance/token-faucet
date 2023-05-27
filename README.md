@@ -12,7 +12,7 @@ Testnet ERC20 &amp; Native coins faucet
 
 Requires min 0.029 ETH to call the functions.
 
-[Faucet Address](https://goerli.etherscan.io/address/0x0a739550BD1bC86Cf2A1d33B05C96f8f7e96b700#code)
+[Faucet Address](https://goerli.etherscan.io/address/0x51D42f33d7f29E546b5cE6c83679b28f60466b45#code)
 
 ### Supported tokens: 
 
