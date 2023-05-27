@@ -12,6 +12,7 @@ import "./SafeERC20.sol";
  *   2. addTokenSupport
  *   3. updateCoinDrainAmount
  *   4. updateTokenDrainAmount
+ *   5. updateLockPeriod
  *
  *   **** Public & External ****
  *
@@ -23,7 +24,6 @@ import "./SafeERC20.sol";
  *   **** Private Functions ****
  *
  *   1. _checkTimelock
- *   2. _isApprovedEnough
  */
 contract MultiTokenFaucet {
     using Address for address;
@@ -39,6 +39,8 @@ contract MultiTokenFaucet {
     uint256 public tokenAmount;
     // Native currency name
     string private nativeCoinName;
+    // The min time till next drain
+    uint256 lockperiod;
 
     struct Token {
         address tokenAddress;
@@ -58,6 +60,7 @@ contract MultiTokenFaucet {
 
     // ****************** Events ******************
     event Log(address user, string message, uint256 amount);
+    event AdminLog(string message, address _address);
 
     // ****************** Modifiers ******************
     modifier onlyAdmin() {
@@ -76,13 +79,15 @@ contract MultiTokenFaucet {
         // Set the transfer amounts
         coinsAmount = 100_000_000 gwei; // 0.1 ETH
         tokenAmount = 100;
+        // Set period till next drain
+        lockperiod = 1 days;
     }
 
     // ****************** ADMIN ******************
 
     /*
-    * Sets a new contract admin
-    */
+     * Sets a new contract admin
+     */
     function setNewAdmin(address _newAdmin) external onlyAdmin {
         require(
             _newAdmin != address(0),
@@ -91,7 +96,7 @@ contract MultiTokenFaucet {
         require(_newAdmin != admin, "This address is already the admin");
         admin = _newAdmin;
         //       Old admin.      message.          New Admin
-        emit Log(msg.sender, "Admin updated", uint256(uint160(_newAdmin)));
+        emit AdminLog("Admin updated", _newAdmin);
     }
 
     /*
@@ -116,7 +121,7 @@ contract MultiTokenFaucet {
         require(_tokenAddress.isContract(), "The address is not a contract");
         require(
             tokens[_tokenName].tokenAddress == address(0),
-            "This tokens is already mapped."
+            string.concat(_tokenName, " is already mapped.")
         );
         require(_decimals <= 18, "Token decimals must lie between 0 & 18");
 
@@ -124,27 +129,31 @@ contract MultiTokenFaucet {
         tokens[_tokenName].tokenAddress = _tokenAddress;
         tokens[_tokenName].decimals = _decimals;
 
-        emit Log(
-            msg.sender,
-            "Token support added",
-            uint256(uint160(_tokenAddress))
-        );
+        emit AdminLog(string.concat(_tokenName, " support added"), _tokenAddress);
     }
 
     /*
-    * Updates the amount of drained coins
-    */
+     * Updates the amount of drained coins
+     */
     function updateCoinDrainAmount(uint256 _newAmount) external onlyAdmin {
         coinsAmount = _newAmount;
         emit Log(msg.sender, "Coin drain amount updated", _newAmount);
     }
 
     /*
-    * Updates the amount of drained tokens
-    */
+     * Updates the amount of drained tokens
+     */
     function updateTokenDrainAmount(uint256 _newAmount) external onlyAdmin {
         tokenAmount = _newAmount;
         emit Log(msg.sender, "Token drain amount updated", _newAmount);
+    }
+
+    /*
+     * Updates the time till next drain
+     */
+    function updateLockPeriod(uint256 _newPeriod) external onlyAdmin {
+        lockperiod = _newPeriod;
+        emit Log(msg.sender, "Updated time till next drain", _newPeriod);
     }
 
     // ****************** PUBLIC & EXTERNAL ******************
@@ -163,15 +172,17 @@ contract MultiTokenFaucet {
         // Left coins update
         available[address(this)] = msg.value;
 
-        emit Log(msg.sender, string.concat("Donated ", nativeCoinName), msg.value);
+        emit Log(
+            msg.sender,
+            string.concat("Donated ", nativeCoinName),
+            msg.value
+        );
     }
 
     /*
      * Sends native ERC20 tokens to the contract
      */
-    function donateERC20(string memory _tokenName, uint256 _amount)
-        public
-    {
+    function donateERC20(string memory _tokenName, uint256 _amount) public {
         // Get the ERC20 token contract address
         address nativeToken = tokens[_tokenName].tokenAddress;
         uint256 amount = _amount * 10**tokens[_tokenName].decimals;
@@ -221,7 +232,11 @@ contract MultiTokenFaucet {
         // Reset the time lock
         locker[msg.sender] = block.timestamp;
 
-        emit Log(msg.sender, string.concat("Received ", nativeCoinName), coinsAmount);
+        emit Log(
+            msg.sender,
+            string.concat("Received ", nativeCoinName),
+            coinsAmount
+        );
     }
 
     /*
@@ -235,15 +250,15 @@ contract MultiTokenFaucet {
 
         // Check
         _checkTimelock();
-        require(nativeToken != address(0), string.concat(_tokenName, "is not suported"));
+        require(
+            nativeToken != address(0),
+            string.concat(_tokenName, "is not suported")
+        );
         require(available[nativeToken] >= amount, "No such tokens left");
 
         // Transfer
         IERC20 currentToken = IERC20(nativeToken);
-        currentToken.safeTransfer(
-            msg.sender,
-            amount
-        );
+        currentToken.safeTransfer(msg.sender, amount);
 
         // STATE UPDATE
 
@@ -263,12 +278,11 @@ contract MultiTokenFaucet {
      */
     function _checkTimelock() private view {
         uint256 timeLock = locker[msg.sender];
-        uint256 plusOneDay = timeLock + 1 days;
+        uint256 plusLockTime = timeLock + lockperiod;
         // If timeLock == 0 => first timer
         // If timeLock > 0 => check time elapsed
-        if (timeLock > uint256(0) && plusOneDay > block.timestamp) {
+        if (timeLock > uint256(0) && plusLockTime > block.timestamp) {
             revert AlreadyDrainedToday();
         }
     }
-
 }
