@@ -12,7 +12,7 @@ Testnet ERC20 &amp; Native coins faucet
 
 Requires min 0.029 ETH to call the functions.
 
-[Faucet Address](https://goerli.etherscan.io/address/0x51D42f33d7f29E546b5cE6c83679b28f60466b45#code)
+[Faucet Address](https://goerli.etherscan.io/address/0x51D42f33d7f29E546b5cE6c83679b28f60466b45#writeContract)
 
 ### Supported tokens: 
 
@@ -30,3 +30,15 @@ Requires min 0.029 ETH to call the functions.
 4. Click the `Write` button & confirm the transaction in your wallet.
 
 ![Explorer Faucet](./assets/Emmet.Bridge.Faucet.png)
+
+## Testnet BSC
+
+[Faucet Address](https://testnet.bscscan.com/address/0xdffcff0d6598b0bddcf9df90c98321078cffd4e0#writeContract)
+
+### Supported tokens:
+
+- [EMMET](https://testnet.bscscan.com/token/0x11b8df9c0906a44141f47245f6ea52a5553431c8) - initial supply 1,000,000 EMMET
+
+## Using the Faucet
+
+Same as above.
